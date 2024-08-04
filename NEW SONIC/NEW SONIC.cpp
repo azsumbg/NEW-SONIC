@@ -90,6 +90,10 @@ ID2D1SolidColorBrush* TxtBrush = nullptr;
 ID2D1SolidColorBrush* HgltBrush = nullptr;
 ID2D1SolidColorBrush* InactBrush = nullptr;
 
+IDWriteFactory* iWriteFactory = nullptr;
+IDWriteTextFormat* nrmText = nullptr;
+IDWriteTextFormat* bigText = nullptr;
+
 ID2D1Bitmap* bmpField = nullptr;
 ID2D1Bitmap* bmpSky = nullptr;
 ID2D1Bitmap* bmpBrick = nullptr;
@@ -124,6 +128,7 @@ template <CanBeReleased GARBAGE> bool Collect(GARBAGE** what)
 
     return false;
 }
+
 void LogError(LPCWSTR what)
 {
     std::wofstream log(L".\\res\\data\\error.log", std::ios::app);
@@ -138,6 +143,10 @@ void ReleaseMem()
     Collect(&TxtBrush);
     Collect(&HgltBrush);
     Collect(&InactBrush);
+
+    Collect(&iWriteFactory);
+    Collect(&nrmText);
+    Collect(&bigText);
     
     Collect(&bmpField);
     Collect(&bmpSky);
@@ -411,15 +420,375 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
     return (LRESULT)(FALSE);
 }
 
+void CreateResources()
+{
+    int first_x = GetSystemMetrics(SM_CXSCREEN) / 2 - (int)(scr_width / 2);
+    if (GetSystemMetrics(SM_CXSCREEN) < first_x + scr_width || GetSystemMetrics(SM_CYSCREEN) < scr_height + 50)ErrExit(eScreen);
 
+    mainIcon = (HICON)(LoadImage(NULL, L".\\res\\main.ico", IMAGE_ICON, 256, 256, LR_LOADFROMFILE));
+    if (!mainIcon)ErrExit(eIcon);
+
+    mainCursor = LoadCursorFromFile(L".\\res\\main.ani");
+    outCursor = LoadCursorFromFile(L".\\res\\out.ani");
+    if (!mainCursor || !outCursor)ErrExit(eCursor);
+
+    bWinClass.lpszClassName = bWinClassName;
+    bWinClass.hInstance = bIns;
+    bWinClass.lpfnWndProc = &WinProc;
+    bWinClass.hbrBackground = CreateSolidBrush(RGB(150, 150, 150));
+    bWinClass.hIcon = mainIcon;
+    bWinClass.hCursor = mainCursor;
+    bWinClass.style = CS_DROPSHADOW;
+
+    if (!RegisterClass(&bWinClass))ErrExit(eClass);
+    else bHwnd = CreateWindowW(bWinClassName, L"MY NEW SONIC 2.0", WS_CAPTION | WS_SYSMENU, first_x, 50,
+        (int)(scr_width), (int)(scr_height), NULL, NULL, bIns, NULL);
+    if (!bHwnd)ErrExit(eWindow);
+    else
+    {
+        ShowWindow(bHwnd, SW_SHOWDEFAULT);
+
+        HRESULT hr = S_OK;
+
+        D2D1_GRADIENT_STOP gStops[2] = { 0 };
+        ID2D1GradientStopCollection* gColl = nullptr;
+
+        hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &iDrawFactory);
+        if (hr != S_OK)
+        {
+            LogError(L"Error creating primary DrawFactory");
+            ErrExit(eD2D);
+        }
+
+        if (iDrawFactory)
+        {
+            hr = iDrawFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(),
+                D2D1::HwndRenderTargetProperties(bHwnd, D2D1::SizeU((UINT32)(scr_width), (UINT32)(scr_height))), &Draw);
+            if (hr != S_OK)
+            {
+                LogError(L"Error creating primary Draw HwndRenderTarget");
+                ErrExit(eD2D);
+            }
+
+            if (Draw)
+            {
+                gStops[0].position = 0;
+                gStops[0].color = D2D1::ColorF(D2D1::ColorF::MediumSlateBlue);
+                gStops[1].position = 1.0f;
+                gStops[1].color = D2D1::ColorF(D2D1::ColorF::Indigo);
+
+                hr = Draw->CreateGradientStopCollection(gStops, 2, &gColl);
+                if (hr != S_OK)
+                {
+                    LogError(L"Error creating GradientStopCollection");
+                    ErrExit(eD2D);
+                }
+                
+                if (gColl)
+                {
+                    hr = Draw->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(D2D1::Point2F(scr_width / 2, 25.0f),
+                        D2D1::Point2F(0, 0), scr_width / 2, 25.0f), gColl, &BckgBrush);
+                    if (hr != S_OK)
+                    {
+                        LogError(L"Error creating primary BackgroundBrush");
+                        ErrExit(eD2D);
+                    }
+                    Collect(&gColl);
+                }
+
+                hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Green), &TxtBrush);
+                if (hr != S_OK)
+                {
+                    LogError(L"Error creating primary TxtBrush");
+                    ErrExit(eD2D);
+                }
+
+                hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Red), &HgltBrush);
+                if (hr != S_OK)
+                {
+                    LogError(L"Error creating primary HgltBrush");
+                    ErrExit(eD2D);
+                }
+
+                hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::DarkGray), &InactBrush);
+                if (hr != S_OK)
+                {
+                    LogError(L"Error creating primary InactBrush");
+                    ErrExit(eD2D);
+                }
+            }
+        }
+
+        hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), 
+            reinterpret_cast<IUnknown**>(&iWriteFactory));
+        if (hr != S_OK)
+        {
+            LogError(L"Error creating iWriteFactory");
+            ErrExit(eD2D);
+        }
+
+        if (iWriteFactory)
+        {
+            hr = iWriteFactory->CreateTextFormat(L"Sitka", NULL, DWRITE_FONT_WEIGHT_BLACK, DWRITE_FONT_STYLE_OBLIQUE,
+                DWRITE_FONT_STRETCH_NORMAL, 24.0F, L"", &nrmText);
+            if (hr != S_OK)
+            {
+                LogError(L"Error creating nrmText");
+                ErrExit(eD2D);
+            }
+
+            hr = iWriteFactory->CreateTextFormat(L"Sitka", NULL, DWRITE_FONT_WEIGHT_BLACK, DWRITE_FONT_STYLE_OBLIQUE,
+                DWRITE_FONT_STRETCH_NORMAL, 64.0F, L"", &bigText);
+            if (hr != S_OK)
+            {
+                LogError(L"Error creating biText");
+                ErrExit(eD2D);
+            }
+        }
+        
+        //BITMAPS **************************
+
+        if (Draw)
+        {
+            bmpBrick = Load(L".\\res\\img\\field\\brick.png", Draw);
+            if (!bmpBrick)
+            {
+                LogError(L"Error loading bmpBrick");
+                ErrExit(eD2D);
+            }
+
+            bmpGoldBrick = Load(L".\\res\\img\\field\\goldbrick.png", Draw);
+            if (!bmpGoldBrick)
+            {
+                LogError(L"Error loading bmpGoldBrick");
+                ErrExit(eD2D);
+            }
+
+            bmpGold = Load(L".\\res\\img\\field\\gold.png", Draw);
+            if (!bmpGold)
+            {
+                LogError(L"Error loading bmpGold");
+                ErrExit(eD2D);
+            }
+
+            bmpBush = Load(L".\\res\\img\\field\\bush.png", Draw);
+            if (!bmpBush)
+            {
+                LogError(L"Error loading bmpBush");
+                ErrExit(eD2D);
+            }
+
+            bmpField = Load(L".\\res\\img\\field\\field.png", Draw);
+            if (!bmpField)
+            {
+                LogError(L"Error loading bmpField");
+                ErrExit(eD2D);
+            }
+
+            bmpSky = Load(L".\\res\\img\\field\\sky.png", Draw);
+            if (!bmpSky)
+            {
+                LogError(L"Error loading bmpSky");
+                ErrExit(eD2D);
+            }
+
+            bmpPlatform = Load(L".\\res\\img\\field\\platform.png", Draw);
+            if (!bmpPlatform)
+            {
+                LogError(L"Error loading bmpPlatform");
+                ErrExit(eD2D);
+            }
+
+            bmpPortal = Load(L".\\res\\img\\field\\portal.png", Draw);
+            if (!bmpPortal)
+            {
+                LogError(L"Error loading bmpPortal");
+                ErrExit(eD2D);
+            }
+
+            bmpRip = Load(L".\\res\\img\\field\\Rip.png", Draw);
+            if (!bmpRip)
+            {
+                LogError(L"Error loading bmpRip");
+                ErrExit(eD2D);
+            }
+
+            bmpTree = Load(L".\\res\\img\\field\\Tree.png", Draw);
+            if (!bmpTree)
+            {
+                LogError(L"Error loading bmpTree");
+                ErrExit(eD2D);
+            }
+
+            bmpMushroom = Load(L".\\res\\img\\evil\\mushroom.png", Draw);
+            if (!bmpMushroom)
+            {
+                LogError(L"Error loading bmpMushroom");
+                ErrExit(eD2D);
+            }
+
+            bmpDizzy = Load(L".\\res\\img\\evil\\dizzy.png", Draw);
+            if (!bmpDizzy)
+            {
+                LogError(L"Error loading bmpDizzy");
+                ErrExit(eD2D);
+            }
+
+            for (int i = 0; i < 6; i++)
+            {
+                wchar_t name[100] = L".\\res\\img\\sonic\\left\\";
+                wchar_t add[5] = L"\0";
+                wsprintf(add, L"%d", i);
+                wcscat_s(name, add);
+                wcscat_s(name, L".gif");
+                bmpSonicL[i] = Load(name, Draw);
+                if (!bmpSonicL[i])
+                {
+                    LogError(L"Error loading bmpSonicL");
+                    ErrExit(eD2D);
+                }
+            }
+            for (int i = 0; i < 6; i++)
+            {
+                wchar_t name[100] = L".\\res\\img\\sonic\\right\\";
+                wchar_t add[5] = L"\0";
+                wsprintf(add, L"%d", i);
+                wcscat_s(name, add);
+                wcscat_s(name, L".gif");
+                bmpSonicR[i] = Load(name, Draw);
+                if (!bmpSonicR[i])
+                {
+                    LogError(L"Error loading bmpSonicR");
+                    ErrExit(eD2D);
+                }
+            }
+        }
+
+        //////////////////////////////////////
+
+        D2D1_RECT_F UpR = { -500.0f,-150.0f,0,0 };
+        D2D1_RECT_F DownR = { scr_width + 300.0f,scr_height + 150.0f,scr_width + 700.0f,scr_height + 300.0f };
+
+        wchar_t UpTxt[21] = L"РАЗХОДКАТА НА ТАРЛЬО";
+        wchar_t DownTxt[12] = L"dev. Daniel";
+
+        bool up_ok = false;
+        bool down_ok = false;
+
+        mciSendString(L"play .\\res\\snd\\intro.wav", NULL, NULL, NULL);
+
+        while (!up_ok || !down_ok)
+        {
+            if (!up_ok)
+            {
+                if (UpR.left < scr_width / 2 - 200.0f)
+                {
+                    UpR.left+=4.0f;
+                    UpR.right+=4.0f;
+                }
+                if (UpR.top < scr_height / 2 - 150.0f)
+                {
+                    UpR.top+=4.0f;
+                    UpR.bottom+=4.0f;
+                }
+
+                if (UpR.left >= scr_width / 2 - 200.0f && UpR.top >= scr_height / 2 - 150.0f)up_ok = true;
+            }
+            if (!down_ok)
+            {
+                if (DownR.left > scr_width / 2 - 150.0f)
+                {
+                    DownR.left -= 4.0f;
+                    DownR.right -= 4.0f;
+                }
+                if (DownR.top > scr_height / 2 + 150.0f)
+                {
+                    DownR.top -= 4.0f;
+                    DownR.bottom -= 4.0f;
+                }
+
+                if (DownR.left <= scr_width / 2 - 150.0f && DownR.top <= scr_height / 2 + 150.0f)down_ok = true;
+            }
+
+            if (Draw && BckgBrush && TxtBrush && bigText)
+            {
+                Draw->BeginDraw();
+                Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+                Draw->DrawText(UpTxt, 21, bigText, UpR, TxtBrush);
+                Draw->DrawText(DownTxt, 12, bigText, DownR, TxtBrush);
+                Draw->EndDraw();
+            }
+        }
+        Sleep(1500);
+    }
+}
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
-    
+    bIns = hInstance;
+    if (!bIns)
+    {
+        LogError(L"Windows hInstance error");
+        ErrExit(eClass);
+    }
+
+    CreateResources();
+
+    while (bMsg.message != WM_QUIT)
+    {
+        if ((bRet = PeekMessage(&bMsg, bHwnd, NULL, NULL, PM_REMOVE)) != 0)
+        {
+            if (bRet == -1)ErrExit(eMsg);
+            TranslateMessage(&bMsg);
+            DispatchMessageW(&bMsg);
+        }
+
+        if (pause)
+        {
+            if (show_help)continue;
+            
+            if (Draw && bigText && TxtBrush)
+            {
+                Draw->BeginDraw();
+                Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+                Draw->DrawText(L"ПАУЗА", 6, bigText, D2D1::RectF(scr_width / 2 - 100.0f, scr_height / 2 - 100.0f, 
+                    scr_width, scr_height),TxtBrush);
+                Draw->EndDraw();
+            }
+            continue;
+        }
+
+        ///////////////////////////////////////////////////////////
 
 
 
+
+        //DRAW THINGS ************************************
+
+        if (Draw && nrmText && bigText && TxtBrush && HgltBrush && InactBrush)
+        {
+            Draw->BeginDraw();
+            Draw->FillRectangle(D2D1::RectF(0, 0, scr_width, 50.0f), BckgBrush);
+            if (name_set)
+                Draw->DrawText(L"ИМЕ НА ИГРАЧ", 13, nrmText, b1Rect, InactBrush);
+            else
+            {
+                if (b1Hglt)Draw->DrawText(L"ИМЕ НА ИГРАЧ", 13, nrmText, b1Rect, HgltBrush);
+                else Draw->DrawText(L"ИМЕ НА ИГРАЧ", 13, nrmText, b1Rect, TxtBrush);
+            }
+            if (b2Hglt)Draw->DrawText(L"ЗВУЦИ ON / OFF", 15, nrmText, b2Rect, HgltBrush);
+            else Draw->DrawText(L"ЗВУЦИ ON / OFF", 15, nrmText, b2Rect, TxtBrush);
+            if (b3Hglt)Draw->DrawText(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, b3Rect, HgltBrush);
+            else Draw->DrawText(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, b3Rect, TxtBrush);
+            Draw->DrawBitmap(bmpSky, D2D1::RectF(0, 50, scr_width, 655.0f));
+            Draw->DrawBitmap(bmpField, D2D1::RectF(0, scr_height - 100.0f, scr_width, scr_height));
+        }
+
+
+        //////////////////////////////////////////////////
+        Draw->EndDraw();
+    }
 
     std::remove(tmp_file);
     ReleaseMem();
