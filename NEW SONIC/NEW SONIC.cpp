@@ -109,7 +109,11 @@ ID2D1Bitmap* bmpSonicR[6] = { nullptr };
 
 /////////////////////////////////////////////////
 
-template <typename GARBAGE> bool Collect(GARBAGE** what)
+template <typename T> concept CanBeReleased = requires(T var)
+{
+    var.Release();
+};
+template <CanBeReleased GARBAGE> bool Collect(GARBAGE** what)
 {
     if ((*what))
     {
