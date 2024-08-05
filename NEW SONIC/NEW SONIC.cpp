@@ -68,6 +68,9 @@ bool b2Hglt = false;
 bool b3Hglt = false;
 bool name_set = false;
 
+bool need_left_field = false;
+bool need_right_field = false;
+
 D2D1_RECT_F b1Rect = { 0, 0, scr_width / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b2Rect = { scr_width / 3, 0, scr_width * 2 / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b3Rect = { scr_width * 2 / 3, 0, scr_width, 50.0f };
@@ -113,6 +116,14 @@ ID2D1Bitmap* bmpSonicR[6] = { nullptr };
 
 /////////////////////////////////////////////////
 
+// GAME VARS ***********************************
+
+engine::Creature Sonic = nullptr;
+
+std::vector<engine::FieldItem> vFields;
+
+
+/////////////////////////////////////////////////
 template <typename T> concept CanBeReleased = requires(T var)
 {
     var.Release();
@@ -181,8 +192,24 @@ void InitGame()
     mins = 0;
     secs = 0;
 
+    need_left_field = false;
+    need_right_field = false;
+
     wcscpy_s(current_player, L"A HEDGEHOG");
     name_set = false;
+
+    Collect(&Sonic);
+    Sonic = engine::CreatureFactory(100.0f, creature_type::sonic);
+
+    if (!vFields.empty())
+    {
+        for (int i = 0; i < vFields.size(); i++)Collect(&vFields[i]);
+    }
+    vFields.clear();
+
+    vFields.push_back(engine::CreateFieldFactory(field_type::field, -scr_width, scr_height - 100.0f));
+    vFields.push_back(engine::CreateFieldFactory(field_type::field, 0, scr_height - 100.0f));
+    vFields.push_back(engine::CreateFieldFactory(field_type::field, scr_width, scr_height - 100.0f));
 }
 
 void GameOver()
@@ -412,6 +439,37 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         }
         break;
 
+    case WM_KEYDOWN:
+        if (Sonic)
+        {
+            switch (LOWORD(wParam))
+            {
+            case VK_RIGHT:
+                if (Sonic->NowJumping())break;
+                Sonic->dir = dirs::right;
+                Sonic->Move((float)(game_speed));
+                break;
+
+            case VK_LEFT:
+                if (Sonic->NowJumping())break;
+                Sonic->dir = dirs::left;
+                Sonic->Move((float)(game_speed));
+                break;
+
+            case VK_UP:
+                Sonic->Jump();
+                break;
+
+            case VK_DOWN:
+                Sonic->dir = dirs::stop;
+                break;
+
+            default:
+                Sonic->dir = dirs::stop;
+                break;
+            }
+        }
+        break;
 
 
     default:return DefWindowProc(hwnd, ReceivedMsg, wParam, lParam);
@@ -496,7 +554,7 @@ void CreateResources()
                     Collect(&gColl);
                 }
 
-                hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Green), &TxtBrush);
+                hr = Draw->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::YellowGreen), &TxtBrush);
                 if (hr != S_OK)
                 {
                     LogError(L"Error creating primary TxtBrush");
@@ -722,7 +780,7 @@ void CreateResources()
         Sleep(1500);
     }
 }
-
+///////////////////////////////////////////////////////////////
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
@@ -761,9 +819,70 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ///////////////////////////////////////////////////////////
 
+        if (Sonic)
+        {
+            if (Sonic->NowJumping())Sonic->Jump();
+        }
 
+        if (!vFields.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator field = vFields.begin(); field < vFields.end(); field++)
+            {
+                bool ended = false;
+                if (!Sonic)break;
+                else
+                {
+                    switch (Sonic->dir)
+                    {
+                    case dirs::right:
+                        (*field)->dir = dirs::left;
+                        (*field)->Move((float)(game_speed));
+                        if ((*field)->x <= -scr_width)
+                        {
+                            (*field)->Release();
+                            vFields.erase(field);
+                            need_right_field = true;
+                            ended = true;
+                        }
+                        break;
 
+                    case dirs::left:
+                        (*field)->dir = dirs::right;
+                        (*field)->Move((float)(game_speed));
+                        if ((*field)->ex >= 2 * scr_width)
+                        {
+                            (*field)->Release();
+                            vFields.erase(field);
+                            need_left_field = true;
+                            ended = true;
+                        }
+                        break;
+                    }
+                }
+                if (ended)break;
+            }
+        }
 
+        if (need_right_field)
+        {
+            need_right_field = false;
+            if (!vFields.empty())vFields.push_back(engine::CreateFieldFactory(field_type::field,
+                vFields.back()->ex, vFields.back()->y));
+        }
+
+        if (need_left_field)
+        {
+            need_left_field = false;
+            
+            if (!vFields.empty())
+            {
+                float start_x = (*vFields.begin())->x - scr_width;
+                float start_y = (*vFields.begin())->y;
+                vFields.push_back(engine::CreateFieldFactory(field_type::field, start_x, start_y));
+            }
+        }
+
+        
         //DRAW THINGS ************************************
 
         if (Draw && nrmText && bigText && TxtBrush && HgltBrush && InactBrush)
@@ -782,9 +901,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             if (b3Hglt)Draw->DrawText(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, b3Rect, HgltBrush);
             else Draw->DrawText(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, b3Rect, TxtBrush);
             Draw->DrawBitmap(bmpSky, D2D1::RectF(0, 50, scr_width, 655.0f));
-            Draw->DrawBitmap(bmpField, D2D1::RectF(0, scr_height - 100.0f, scr_width, scr_height));
+            
+            if (!vFields.empty())
+                for (int i = 0; i < vFields.size(); i++)
+                    Draw->DrawBitmap(bmpField, D2D1::RectF(vFields[i]->x, vFields[i]->y, vFields[i]->ex, vFields[i]->ey));
         }
 
+        if (Sonic)
+        {
+            switch (Sonic->dir)
+            {
+            case dirs::stop:
+                Draw->DrawBitmap(bmpSonicR[0], D2D1::RectF(Sonic->x, Sonic->y, Sonic->ex, Sonic->ey));
+                break;
+
+            case dirs::right:
+                Draw->DrawBitmap(bmpSonicR[Sonic->GetFrame()], D2D1::RectF(Sonic->x, Sonic->y, Sonic->ex, Sonic->ey));
+                break;
+
+            case dirs::left:
+                Draw->DrawBitmap(bmpSonicL[Sonic->GetFrame()], D2D1::RectF(Sonic->x, Sonic->y, Sonic->ex, Sonic->ey));
+                break;
+            }
+        }
 
         //////////////////////////////////////////////////
         Draw->EndDraw();

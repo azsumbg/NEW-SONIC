@@ -23,6 +23,7 @@ enum class creature_type { sonic = 0, mushroom = 1};
 
 namespace engine
 {
+	
 	class SONIC_API ATOM
 	{
 		protected:
@@ -170,7 +171,7 @@ namespace engine
 				return DLL_NaN;
 			}
 
-			extern friend BASICFIELD* CreateFieldFactory(field_type what, float sx, float sy);
+			friend BASICFIELD* CreateFieldFactory(field_type what, float sx, float sy);
 	};
 
 	class SONIC_API BASICCREATURES :public ATOM
@@ -244,6 +245,7 @@ namespace engine
 			virtual bool Move(float gear) = 0;
 			virtual void Jump() = 0;
 			
+			
 			void Fall()
 			{
 				y += speed;
@@ -277,4 +279,8 @@ namespace engine
 	typedef BASICCREATURES* Creature;
 
 	extern SONIC_API Creature CreatureFactory(float _where_x, creature_type _what);
+	BASICFIELD* CreateFieldFactory(field_type what, float sx, float sy)
+	{
+		return new engine::BASICFIELD(sx, sy, what);
+	}
 }
