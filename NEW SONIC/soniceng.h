@@ -243,7 +243,7 @@ namespace engine
 
 			virtual void Release() = 0;
 			virtual bool Move(float gear) = 0;
-			virtual void Jump() = 0;
+			virtual void Jump(bool interrupt_jump) = 0;
 			
 			
 			void Fall()

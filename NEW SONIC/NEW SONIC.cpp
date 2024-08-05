@@ -122,6 +122,8 @@ engine::Creature Sonic = nullptr;
 
 std::vector<engine::FieldItem> vFields;
 
+std::vector<engine::FieldItem> vPlatforms;
+
 
 /////////////////////////////////////////////////
 template <typename T> concept CanBeReleased = requires(T var)
@@ -457,7 +459,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 break;
 
             case VK_UP:
-                Sonic->Jump();
+                Sonic->Jump(false);
                 break;
 
             case VK_DOWN:
@@ -821,7 +823,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (Sonic)
         {
-            if (Sonic->NowJumping())Sonic->Jump();
+            if (Sonic->NowJumping())Sonic->Jump(false);
         }
 
         if (!vFields.empty())
@@ -881,7 +883,34 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 vFields.push_back(engine::CreateFieldFactory(field_type::field, start_x, start_y));
             }
         }
+        //////////////////////////////////////////////////////
 
+        if (vPlatforms.size() < 2)
+        {
+            if (rand() % 500 == 66)
+            {
+                vPlatforms.push_back(engine::CreateFieldFactory(field_type::platform, scr_width, 520.0f));
+                vPlatforms.back()->dir = dirs::left;
+            }
+        }
+        if (!vPlatforms.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator platform = vPlatforms.begin(); platform < vPlatforms.end(); platform++)
+            {
+                if (Sonic)
+                {
+                    if (Sonic->dir == dirs::right)(*platform)->dir = dirs::left;
+                    if (Sonic->dir == dirs::left)(*platform)->dir = dirs::right;
+                }
+                (*platform)->Move((float)(game_speed));
+                if ((*platform)->ex <= -scr_width || (*platform)->x >= 2 * scr_width)
+                {
+                    (*platform)->Release();
+                    vPlatforms.erase(platform);
+                    break;
+                }
+            }
+        }
         
         //DRAW THINGS ************************************
 
@@ -905,6 +934,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             if (!vFields.empty())
                 for (int i = 0; i < vFields.size(); i++)
                     Draw->DrawBitmap(bmpField, D2D1::RectF(vFields[i]->x, vFields[i]->y, vFields[i]->ex, vFields[i]->ey));
+            if (!vPlatforms.empty())
+                for (int i = 0; i < vPlatforms.size(); i++)
+                    Draw->DrawBitmap(bmpPlatform, D2D1::RectF(vPlatforms[i]->x, vPlatforms[i]->y, 
+                        vPlatforms[i]->ex, vPlatforms[i]->ey));
         }
 
         if (Sonic)
