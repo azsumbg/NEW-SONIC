@@ -71,6 +71,8 @@ bool name_set = false;
 bool need_left_field = false;
 bool need_right_field = false;
 
+bool sonic_falling = true;
+
 D2D1_RECT_F b1Rect = { 0, 0, scr_width / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b2Rect = { scr_width / 3, 0, scr_width * 2 / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b3Rect = { scr_width * 2 / 3, 0, scr_width, 50.0f };
@@ -823,9 +825,53 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (Sonic)
         {
-            if (Sonic->NowJumping())Sonic->Jump(false);
+            if (Sonic->NowJumping())
+            {
+                Sonic->Jump(false);
+                sonic_falling = false;
+            }
+            else if (Sonic->y < scr_height - 155.0f)sonic_falling = true;
+            else sonic_falling = false;
         }
 
+        if (!vPlatforms.empty() && Sonic)
+        {
+            if (Sonic->NowJumping())
+            {
+                for (std::vector<engine::FieldItem>::iterator plat = vPlatforms.begin(); plat < vPlatforms.end(); plat++)
+                {
+                    if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
+                        Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
+                    {
+                        Sonic->Jump(true);
+                        Sonic->y = (*plat)->y - Sonic->GetHeight();
+                        Sonic->SetEdges();
+                        sonic_falling = false;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                for (std::vector<engine::FieldItem>::iterator plat = vPlatforms.begin(); plat < vPlatforms.end(); plat++)
+                {
+                    if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
+                        Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
+                    {
+                        sonic_falling = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (Sonic && sonic_falling)Sonic->Fall();
+
+
+
+
+
+        /////////////////////////////////////////////
         if (!vFields.empty())
         {
             for (std::vector<engine::FieldItem>::iterator field = vFields.begin(); field < vFields.end(); field++)
@@ -901,6 +947,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     if (Sonic->dir == dirs::right)(*platform)->dir = dirs::left;
                     if (Sonic->dir == dirs::left)(*platform)->dir = dirs::right;
+                    if (Sonic->dir == dirs::stop)(*platform)->dir = dirs::stop;
                 }
                 (*platform)->Move((float)(game_speed));
                 if ((*platform)->ex <= -scr_width || (*platform)->x >= 2 * scr_width)
@@ -911,6 +958,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 }
             }
         }
+
+        ////////////////////////////////////////////////////
+
+       
+
         
         //DRAW THINGS ************************************
 
