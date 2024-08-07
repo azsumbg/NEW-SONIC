@@ -126,6 +126,9 @@ std::vector<engine::FieldItem> vFields;
 
 std::vector<engine::FieldItem> vPlatforms;
 
+std::vector<engine::FieldItem> vCubes;
+
+std::vector<engine::FieldItem> vGoldCubes;
 
 /////////////////////////////////////////////////
 template <typename T> concept CanBeReleased = requires(T var)
@@ -214,6 +217,15 @@ void InitGame()
     vFields.push_back(engine::CreateFieldFactory(field_type::field, -scr_width, scr_height - 100.0f));
     vFields.push_back(engine::CreateFieldFactory(field_type::field, 0, scr_height - 100.0f));
     vFields.push_back(engine::CreateFieldFactory(field_type::field, scr_width, scr_height - 100.0f));
+
+    if (!vPlatforms.empty())
+        for (int i = 0; i < vPlatforms.size(); i++)Collect(&vPlatforms[i]);
+
+    if (!vCubes.empty())
+        for (int i = 0; i < vCubes.size(); i++)Collect(&vCubes[i]);
+
+    if (!vGoldCubes.empty())
+        for (int i = 0; i < vGoldCubes.size(); i++)Collect(&vGoldCubes[i]);
 }
 
 void GameOver()
@@ -484,6 +496,15 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
 void CreateResources()
 {
+    int result = 0;
+    CheckFile(Ltmp_file, &result);
+    if (result == FILE_EXIST)ErrExit(eStarted);
+    else
+    {
+        std::wofstream tmp(Ltmp_file);
+        tmp << L"IgrUta rAboti bre !"; 
+        tmp.close();
+    }
     int first_x = GetSystemMetrics(SM_CXSCREEN) / 2 - (int)(scr_width / 2);
     if (GetSystemMetrics(SM_CXSCREEN) < first_x + scr_width || GetSystemMetrics(SM_CYSCREEN) < scr_height + 50)ErrExit(eScreen);
 
@@ -858,6 +879,40 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
                         Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
                     {
+                        Sonic->y = (*plat)->y - Sonic->GetHeight();
+                        Sonic->SetEdges();
+                        sonic_falling = false;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!vCubes.empty() && Sonic)
+        {
+            if (Sonic->NowJumping())
+            {
+                for (std::vector<engine::FieldItem>::iterator plat = vCubes.begin(); plat < vCubes.end(); plat++)
+                {
+                    if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
+                        Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
+                    {
+                        Sonic->Jump(true);
+                        Sonic->y = (*plat)->y - Sonic->GetHeight();
+                        Sonic->SetEdges();
+                        sonic_falling = false;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                for (std::vector<engine::FieldItem>::iterator plat = vCubes.begin(); plat < vCubes.end(); plat++)
+                {
+                    if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
+                        Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
+                    {
+                        Sonic->y = (*plat)->y - Sonic->GetHeight();
+                        Sonic->SetEdges();
                         sonic_falling = false;
                         break;
                     }
@@ -865,11 +920,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+
         if (Sonic && sonic_falling)Sonic->Fall();
-
-
-
-
 
         /////////////////////////////////////////////
         if (!vFields.empty())
@@ -959,6 +1011,34 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        if (vCubes.size() < 3)
+        {
+            if (rand() % 1000 == 66)
+            {
+                vCubes.push_back(engine::CreateFieldFactory(field_type::brick, scr_width, 460.0f));
+                vCubes.back()->dir = dirs::left;
+            }
+        }
+        if (!vCubes.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator platform = vCubes.begin(); platform < vCubes.end(); platform++)
+            {
+                if (Sonic)
+                {
+                    if (Sonic->dir == dirs::right)(*platform)->dir = dirs::left;
+                    if (Sonic->dir == dirs::left)(*platform)->dir = dirs::right;
+                    if (Sonic->dir == dirs::stop)(*platform)->dir = dirs::stop;
+                }
+                (*platform)->Move((float)(game_speed));
+                if ((*platform)->ex <= -scr_width || (*platform)->x >= 2 * scr_width)
+                {
+                    (*platform)->Release();
+                    vCubes.erase(platform);
+                    break;
+                }
+            }
+        }
+
         ////////////////////////////////////////////////////
 
        
@@ -990,6 +1070,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 for (int i = 0; i < vPlatforms.size(); i++)
                     Draw->DrawBitmap(bmpPlatform, D2D1::RectF(vPlatforms[i]->x, vPlatforms[i]->y, 
                         vPlatforms[i]->ex, vPlatforms[i]->ey));
+            if (!vCubes.empty())
+                for (int i = 0; i < vCubes.size(); i++)
+                    Draw->DrawBitmap(bmpBrick, D2D1::RectF(vCubes[i]->x, vCubes[i]->y,
+                        vCubes[i]->ex, vCubes[i]->ey));
         }
 
         if (Sonic)
