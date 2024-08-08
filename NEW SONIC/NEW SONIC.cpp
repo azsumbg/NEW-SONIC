@@ -130,6 +130,10 @@ std::vector<engine::FieldItem> vCubes;
 
 std::vector<engine::FieldItem> vGoldCubes;
 
+std::vector<engine::FieldItem> vBushes;
+
+std::vector<engine::FieldItem> vTrees;
+
 /////////////////////////////////////////////////
 template <typename T> concept CanBeReleased = requires(T var)
 {
@@ -220,12 +224,23 @@ void InitGame()
 
     if (!vPlatforms.empty())
         for (int i = 0; i < vPlatforms.size(); i++)Collect(&vPlatforms[i]);
+    vPlatforms.clear();
 
     if (!vCubes.empty())
         for (int i = 0; i < vCubes.size(); i++)Collect(&vCubes[i]);
+    vCubes.clear();
 
     if (!vGoldCubes.empty())
         for (int i = 0; i < vGoldCubes.size(); i++)Collect(&vGoldCubes[i]);
+    vGoldCubes.clear();
+
+    if (!vBushes.empty())
+        for (int i = 0; i < vBushes.size(); i++)Collect(&vBushes[i]);
+    vBushes.clear();
+
+    if (!vTrees.empty())
+        for (int i = 0; i < vTrees.size(); i++)Collect(&vTrees[i]);
+    vTrees.clear();
 }
 
 void GameOver()
@@ -919,7 +934,38 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 }
             }
         }
-
+        if (!vGoldCubes.empty() && Sonic)
+        {
+            if (Sonic->NowJumping())
+            {
+                for (std::vector<engine::FieldItem>::iterator plat = vGoldCubes.begin(); plat < vGoldCubes.end(); plat++)
+                {
+                    if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
+                        Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
+                    {
+                        Sonic->Jump(true);
+                        Sonic->y = (*plat)->y - Sonic->GetHeight();
+                        Sonic->SetEdges();
+                        sonic_falling = false;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                for (std::vector<engine::FieldItem>::iterator plat = vGoldCubes.begin(); plat < vGoldCubes.end(); plat++)
+                {
+                    if (!(Sonic->x >= (*plat)->ex || Sonic->ex <= (*plat)->x ||
+                        Sonic->y >= (*plat)->ey || Sonic->ey <= (*plat)->y))
+                    {
+                        Sonic->y = (*plat)->y - Sonic->GetHeight();
+                        Sonic->SetEdges();
+                        sonic_falling = false;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (Sonic && sonic_falling)Sonic->Fall();
 
@@ -1015,7 +1061,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         {
             if (rand() % 1000 == 66)
             {
-                vCubes.push_back(engine::CreateFieldFactory(field_type::brick, scr_width, 460.0f));
+                vCubes.push_back(engine::CreateFieldFactory(field_type::brick, scr_width, 420.0f));
                 vCubes.back()->dir = dirs::left;
             }
         }
@@ -1034,6 +1080,90 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     (*platform)->Release();
                     vCubes.erase(platform);
+                    break;
+                }
+            }
+        }
+
+        if (vGoldCubes.size() < 3)
+        {
+            if (rand() % 1000 == 66)
+            {
+                vGoldCubes.push_back(engine::CreateFieldFactory(field_type::gold_brick, scr_width, 280.0f));
+                vGoldCubes.back()->dir = dirs::left;
+            }
+        }
+        if (!vGoldCubes.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator platform = vGoldCubes.begin(); platform < vGoldCubes.end(); platform++)
+            {
+                if (Sonic)
+                {
+                    if (Sonic->dir == dirs::right)(*platform)->dir = dirs::left;
+                    if (Sonic->dir == dirs::left)(*platform)->dir = dirs::right;
+                    if (Sonic->dir == dirs::stop)(*platform)->dir = dirs::stop;
+                }
+                (*platform)->Move((float)(game_speed));
+                if ((*platform)->ex <= -scr_width || (*platform)->x >= 2 * scr_width)
+                {
+                    (*platform)->Release();
+                    vGoldCubes.erase(platform);
+                    break;
+                }
+            }
+        }
+        
+        if (vBushes.size() < 2 && vTrees.size() < 2)
+        {
+            if (rand() % 2300 == 66)
+            {
+                vBushes.push_back(engine::CreateFieldFactory(field_type::bush, scr_width, scr_height - 160.0f));
+                vBushes.back()->dir = dirs::left;
+            }
+        }
+        if (!vBushes.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator platform = vBushes.begin(); platform < vBushes.end(); platform++)
+            {
+                if (Sonic)
+                {
+                    if (Sonic->dir == dirs::right)(*platform)->dir = dirs::left;
+                    if (Sonic->dir == dirs::left)(*platform)->dir = dirs::right;
+                    if (Sonic->dir == dirs::stop)(*platform)->dir = dirs::stop;
+                }
+                (*platform)->Move((float)(game_speed));
+                if ((*platform)->ex <= -scr_width || (*platform)->x >= 2 * scr_width)
+                {
+                    (*platform)->Release();
+                    vBushes.erase(platform);
+                    break;
+                }
+            }
+        }
+
+        if (vBushes.size() < 2 && vTrees.size() < 2)
+        {
+            if (rand() % 3000 == 66)
+            {
+                vTrees.push_back(engine::CreateFieldFactory(field_type::tree, scr_width, scr_height - 160.0f));
+                vTrees.back()->dir = dirs::left;
+            }
+        }
+        if (!vTrees.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator platform = vTrees.begin(); platform < vTrees.end(); platform++)
+            {
+                if (Sonic)
+                {
+                    if (Sonic->dir == dirs::right)(*platform)->dir = dirs::left;
+                    if (Sonic->dir == dirs::left)(*platform)->dir = dirs::right;
+                    if (Sonic->dir == dirs::stop)(*platform)->dir = dirs::stop;
+                }
+                (*platform)->Move((float)(game_speed));
+                if ((*platform)->ex <= -scr_width || (*platform)->x >= 2 * scr_width)
+                {
+                    (*platform)->Release();
+                    vTrees.erase(platform);
                     break;
                 }
             }
@@ -1074,6 +1204,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 for (int i = 0; i < vCubes.size(); i++)
                     Draw->DrawBitmap(bmpBrick, D2D1::RectF(vCubes[i]->x, vCubes[i]->y,
                         vCubes[i]->ex, vCubes[i]->ey));
+            if (!vGoldCubes.empty())
+                for (int i = 0; i < vGoldCubes.size(); i++)
+                    Draw->DrawBitmap(bmpGoldBrick, D2D1::RectF(vGoldCubes[i]->x, vGoldCubes[i]->y,
+                        vGoldCubes[i]->ex, vGoldCubes[i]->ey));
+            if (!vBushes.empty())
+                for (int i = 0; i < vBushes.size(); i++)
+                    Draw->DrawBitmap(bmpBush, D2D1::RectF(vBushes[i]->x, vBushes[i]->y,
+                        vBushes[i]->ex, vBushes[i]->ey));
+            if (!vTrees.empty())
+                for (int i = 0; i < vTrees.size(); i++)
+                    Draw->DrawBitmap(bmpTree, D2D1::RectF(vTrees[i]->x, vTrees[i]->y,
+                        vTrees[i]->ex, vTrees[i]->ey));
         }
 
         if (Sonic)
