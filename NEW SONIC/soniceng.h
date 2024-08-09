@@ -267,9 +267,8 @@ namespace engine
 				{
 					dizzy_counter = 0;
 					is_dizzy = false;
-					return false;
 				}
-				return true;
+				return is_dizzy;
 			}
 	};
 

@@ -489,6 +489,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
     case WM_KEYDOWN:
         if (Sonic)
         {
+            if (Sonic->IsDizzy())break;
             switch (LOWORD(wParam))
             {
             case VK_RIGHT:
@@ -1084,6 +1085,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     if (!(Sonic->x >= (*obstacle)->ex || Sonic->ex <= (*obstacle)->x
                         || Sonic->y >= (*obstacle)->ey || Sonic->ey <= (*obstacle)->y))
                     {
+                        Sonic->Dizzy();
+                        if (sound)mciSendString(L"play .\\res\\snd\\dizzy.wav", NULL, NULL, NULL);
                         if (Sonic->x - 50.0f >= 0)
                         {
                             Sonic->x -= 50.0f;
@@ -1112,6 +1115,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     if (!(Sonic->x >= (*obstacle)->ex || Sonic->ex <= (*obstacle)->x
                         || Sonic->y >= (*obstacle)->ey || Sonic->ey <= (*obstacle)->y))
                     {
+                        Sonic->Dizzy();
+                        if (sound)mciSendString(L"play .\\res\\snd\\dizzy.wav", NULL, NULL, NULL);
                         if (Sonic->x - 50.0f >= 0)
                         {
                             Sonic->x -= 50.0f;
@@ -1126,10 +1131,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                             Sonic->dir = dirs::stop;
                             break;
                         }
+                        
                     }
                 }
             }
         }
+        
         
         /////////////////////////////////////////////
 
@@ -1424,6 +1431,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Draw->DrawBitmap(bmpSonicL[Sonic->GetFrame()], D2D1::RectF(Sonic->x, Sonic->y, Sonic->ex, Sonic->ey));
                 break;
             }
+            if (Sonic->IsDizzy())
+            {
+                Draw->DrawBitmap(bmpDizzy, D2D1::RectF(Sonic->x, Sonic->y - 23.0f, Sonic->x + 50.0f, Sonic->y));
+                Sonic->Dizzy();
+            }
+
         }
 
         //////////////////////////////////////////////////
