@@ -1519,6 +1519,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         vBushes.erase(bush);
                         vShots.erase(bul);
                         on_target = true;
+                        if (sound)mciSendString(L"play .\\res\\snd\\burn.wav", NULL, NULL, NULL);
                         break;
                     }
                 }
@@ -1543,6 +1544,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         vTrees.erase(bush);
                         vShots.erase(bul);
                         on_target = true;
+                        if (sound)mciSendString(L"play .\\res\\snd\\burn.wav", NULL, NULL, NULL);
                         break;
                     }
                 }
@@ -1581,6 +1583,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     (*evil)->Release();
                     vEvils.erase(evil);
                     score -= 10;
+                    if (sound)mciSendString(L"play .\\res\\snd\\hurt.wav", NULL, NULL, NULL);
                     if (score < 0)
                     {
                         RipRect.left = Sonic->x;
