@@ -68,12 +68,15 @@ bool b2Hglt = false;
 bool b3Hglt = false;
 bool name_set = false;
 
+bool new_game = true;
+bool portal_enabled = false;
 bool need_left_field = false;
 bool need_right_field = false;
 
 bool sonic_falling = true;
 bool sonic_killed = false;
 int sonic_killed_timer = 500;
+
 
 D2D1_RECT_F b1Rect = { 0, 0, scr_width / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b2Rect = { scr_width / 3, 0, scr_width * 2 / 3 - 50.0f, 50.0f };
@@ -158,6 +161,8 @@ std::vector<DRIEDTREE> vDriedTrees;
 
 std::vector<engine::Creature> vEvils;
 
+engine::FieldItem Portal = engine::CreateFieldFactory(field_type::portal, scr_width, scr_height - 200.0f);
+
 /////////////////////////////////////////////////
 template <typename T> concept CanBeReleased = requires(T var)
 {
@@ -224,15 +229,25 @@ void ErrExit(int what)
 void InitGame()
 {
     game_speed = 1;
-    score = 0;
     mins = 0;
-    secs = 0;
+    secs = 300;
 
     need_left_field = false;
     need_right_field = false;
 
-    wcscpy_s(current_player, L"A HEDGEHOG");
-    name_set = false;
+    if (new_game)
+    {
+        wcscpy_s(current_player, L"A HEDGEHOG");
+        name_set = false;
+        score = 0;
+    }
+
+    if (portal_enabled)
+    {
+        portal_enabled = false;
+        Portal->x = scr_width;
+        Portal->SetEdges();
+    }
 
     Collect(&Sonic);
     Sonic = engine::CreatureFactory(100.0f, creature_type::sonic);
@@ -268,8 +283,8 @@ void InitGame()
     vTrees.clear();
 
     if (!vRings.empty())
-        for (int i = 0; i < vTrees.size(); i++)Collect(&vTrees[i]);
-    vTrees.clear();
+        for (int i = 0; i < vTrees.size(); i++)Collect(&vRings[i]);
+    vRings.clear();
 
     if (!vShots.empty())vShots.clear();
 
@@ -289,6 +304,39 @@ void GameOver()
 
     bMsg.message = WM_QUIT;
     bMsg.wParam = 0;
+}
+void LevelUp()
+{
+    if (sound)mciSendString(L"play .\\res\\snd\\levelup.wav", NULL, NULL, NULL);
+    
+    int blinker = 15;
+
+    while (blinker > 0)
+    {
+        if (Draw && BckgBrush && TxtBrush && bigText)
+        {
+            if (blinker % 2 == 0)
+            {
+                Draw->BeginDraw();
+                Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+                Draw->DrawText(L"НИВОТО ПРЕМИНАТО !", 19, bigText, D2D1::RectF(10.0f, scr_height / 2 - 50.0f, 
+                    scr_width,scr_height), TxtBrush);
+                Draw->EndDraw();
+                Sleep(200);
+            }
+            else
+            {
+                Draw->BeginDraw();
+                Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+                Draw->EndDraw();
+                Sleep(200);
+            }
+        }
+        blinker--;
+    }
+    
+    InitGame();
+    game_speed++;
 }
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
@@ -335,6 +383,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
     case WM_CREATE:
         SetTimer(hwnd, bTimer, 1000, NULL);
         srand((unsigned int)(time(0)));
+        new_game = true;
 
         bBar = CreateMenu();
         bMain = CreateMenu();
@@ -465,8 +514,12 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
     case WM_TIMER:
         if (pause)break;
-        secs++;
+        secs--;
         mins = secs / 60;
+        if (secs <= 0)
+        {
+            portal_enabled = true;
+        }
         break;
 
     case WM_COMMAND:
@@ -481,6 +534,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 pause = false;
                 break;
             }
+            new_game = true;
             InitGame();
             pause = false;
             break;
@@ -563,6 +617,19 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 Sonic->dir = dirs::stop;
                 break;
             }
+        }
+        break;
+
+    case WM_LBUTTONDOWN:
+        if (HIWORD(lParam) <= 50.0f)
+        {
+            if (LOWORD(lParam) >= b1Rect.left && LOWORD(lParam) <= b1Rect.right)
+            {
+                if (sound)mciSendString(L"play .\\res\\select.wav", NULL, NULL, NULL);
+                if (DialogBox(bIns, MAKEINTRESOURCE(IDD_PLAYER), hwnd, &DlgProc) == IDOK)name_set = true;
+                break;
+            }
+
         }
         break;
 
@@ -691,7 +758,7 @@ void CreateResources()
         if (iWriteFactory)
         {
             hr = iWriteFactory->CreateTextFormat(L"Sitka", NULL, DWRITE_FONT_WEIGHT_BLACK, DWRITE_FONT_STYLE_OBLIQUE,
-                DWRITE_FONT_STRETCH_NORMAL, 24.0F, L"", &nrmText);
+                DWRITE_FONT_STRETCH_NORMAL, 22.0F, L"", &nrmText);
             if (hr != S_OK)
             {
                 LogError(L"Error creating nrmText");
@@ -1600,8 +1667,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         
         //////////////////////////////////////////////////
-         
-        
+
         //DRAW THINGS ************************************
 
         if (Draw && nrmText && bigText && TxtBrush && HgltBrush && InactBrush)
@@ -1719,6 +1785,71 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             Draw->DrawBitmap(bmpRip, RipRect);
             if (sonic_killed_timer < 0)GameOver();
         }
+
+        if (portal_enabled)
+        {
+            if (Sonic)
+                switch (Sonic->dir)
+                {
+                case dirs::left:
+                    Portal->dir = dirs::right;
+                    break;
+
+                case dirs::right:
+                    Portal->dir = dirs::left;
+                    break;
+                }
+            if (Portal)
+            {
+                Portal->Move((float)(game_speed));
+                if (Portal->ex <= 0)
+                {
+                    Portal->x = scr_width;
+                    Portal->SetEdges();
+                }
+                Draw->DrawBitmap(bmpPortal, D2D1::RectF(Portal->x, Portal->y, Portal->ex, Portal->ey));
+
+            }
+
+            if (Sonic && Portal)
+            {
+                if (!(Sonic->x >= Portal->ex || Sonic->ex <= Portal->x || Sonic->y >= Portal->ey || Sonic->ey <= Portal->y))
+                {
+                    new_game = false;
+                    Draw->EndDraw();
+                    LevelUp();
+                }
+            }
+        }
+        // STATUS ************************************
+
+        wchar_t stat_text[350] = L"играч: ";
+        wchar_t add[5] = L"\0";
+        int txt_size = 0;
+
+        wcscat_s(stat_text, current_player);
+
+        wcscat_s(stat_text, L", рингове: ");
+        wsprintf(add, L"%d", score);
+        wcscat_s(stat_text, add);
+
+        wcscat_s(stat_text, L", време: 0");
+        wsprintf(add, L"%d", mins);
+        wcscat_s(stat_text, add);
+        wcscat_s(stat_text, L" : ");
+        if(secs-mins*60<10)wcscat_s(stat_text, L"0");
+        wsprintf(add, L"%d", secs - mins * 60);
+        wcscat_s(stat_text, add);
+
+        for (int i = 0; i < 350; i++)
+        {
+            if (stat_text[i] != '\0')txt_size++;
+            else break;
+        }
+
+        if (nrmText && TxtBrush)
+            Draw->DrawTextW(stat_text, txt_size, nrmText, D2D1::RectF(20.0f, scr_height - 60.0f, scr_width, scr_height), TxtBrush);
+
 
         //////////////////////////////////////////////////
         Draw->EndDraw();
