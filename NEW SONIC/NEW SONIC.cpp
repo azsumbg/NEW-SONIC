@@ -294,14 +294,94 @@ void InitGame()
         for (int i = 0; i < vEvils.size(); ++i)Collect(&vEvils[i]);
     vEvils.clear();
 }
+BOOL CheckRecord()
+{
+    if (score < 1)return no_record;
+    score *= game_speed;
 
+    int result = 0;
+
+    CheckFile(record_file, &result);
+    if (result == FILE_NOT_EXIST)
+    {
+        std::wofstream rec(record_file);
+        rec << score << std::endl;
+        for (int i = 0; i < 16; i++)rec << static_cast<int>(current_player[i]) << std::endl;
+        rec.close();
+        return first_record;
+    }
+    else
+    {
+        std::wifstream check(record_file);
+        check >> result;
+        check.close();
+    }
+
+    if (result < score)
+    {
+        std::wofstream rec(record_file);
+        rec << score << std::endl;
+        for (int i = 0; i < 16; i++)rec << static_cast<int>(current_player[i]) << std::endl;
+        rec.close();
+        return record;
+    }
+    return no_record;
+}
 void GameOver()
 {
     KillTimer(bHwnd, bTimer);
     PlaySound(NULL, NULL, NULL);
+    score = 0;
+    for (int i = 1; i <= game_speed; i++)score += (300 - secs) * i;
 
+    wchar_t final_text[19] = L"О, О, О ! ЗАГУБИ !";
+    int txt_size = 19;
 
+    switch (CheckRecord())
+    {
+    case no_record:
+        if (sound)PlaySound(L".\\res\\snd\\loose.wav", NULL, SND_ASYNC);
+        break;
 
+    case first_record:
+        wcscpy_s(final_text, L"СВЕТОВЕН РЕКОРД !");
+        if (sound)PlaySound(L".\\res\\snd\\record.wav", NULL, SND_ASYNC);
+        txt_size = 18;
+        break;
+
+    case record:
+        wcscpy_s(final_text, L"ПЪРВИ РЕКОРД !");
+        if (sound)PlaySound(L".\\res\\snd\\record.wav", NULL, SND_ASYNC);
+        txt_size = 15;
+        break;
+    }
+
+    int blinker = 15;
+
+    while (blinker > 0)
+    {
+        if (Draw && BckgBrush && TxtBrush && bigText)
+        {
+            if (blinker % 2 == 0)
+            {
+                Draw->BeginDraw();
+                Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+                Draw->DrawText(final_text, txt_size, bigText, D2D1::RectF(10.0f, scr_height / 2 - 50.0f,
+                    scr_width, scr_height), TxtBrush);
+                Draw->EndDraw();
+                Sleep(200);
+            }
+            else
+            {
+                Draw->BeginDraw();
+                Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+                Draw->EndDraw();
+                Sleep(200);
+            }
+        }
+        blinker--;
+    }
+    Sleep(6500);
     bMsg.message = WM_QUIT;
     bMsg.wParam = 0;
 }
@@ -513,7 +593,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         break;
 
     case WM_TIMER:
-        if (pause)break;
+        if (pause || sonic_killed)break;
         secs--;
         mins = secs / 60;
         if (secs <= 0)
@@ -625,6 +705,11 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
         {
             if (LOWORD(lParam) >= b1Rect.left && LOWORD(lParam) <= b1Rect.right)
             {
+                if (name_set)
+                {
+                    if(sound)mciSendString(L"play .\\res\\negative.wav", NULL, NULL, NULL);
+                    break;
+                }
                 if (sound)mciSendString(L"play .\\res\\select.wav", NULL, NULL, NULL);
                 if (DialogBox(bIns, MAKEINTRESOURCE(IDD_PLAYER), hwnd, &DlgProc) == IDOK)name_set = true;
                 break;
