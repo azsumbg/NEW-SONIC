@@ -72,10 +72,14 @@ bool need_left_field = false;
 bool need_right_field = false;
 
 bool sonic_falling = true;
+bool sonic_killed = false;
+int sonic_killed_timer = 500;
 
 D2D1_RECT_F b1Rect = { 0, 0, scr_width / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b2Rect = { scr_width / 3, 0, scr_width * 2 / 3 - 50.0f, 50.0f };
 D2D1_RECT_F b3Rect = { scr_width * 2 / 3, 0, scr_width, 50.0f };
+
+D2D1_RECT_F RipRect = { 0,0,0,0 };
 
 wchar_t current_player[16] = L"A HEDGEHOG";
 
@@ -109,6 +113,7 @@ ID2D1Bitmap* bmpPlatform = nullptr;
 ID2D1Bitmap* bmpRip = nullptr;
 ID2D1Bitmap* bmpPortal = nullptr;
 ID2D1Bitmap* bmpTree = nullptr;
+ID2D1Bitmap* bmpDriedTree = nullptr;
 
 ID2D1Bitmap* bmpMushroom = nullptr;
 ID2D1Bitmap* bmpDizzy = nullptr;
@@ -122,6 +127,11 @@ struct BULLET
 {
     engine::ATOM Dims;
     dirs dir;
+};
+struct DRIEDTREE
+{
+    engine::ATOM Dims;
+    int counter = 500;
 };
 
 // GAME VARS ***********************************
@@ -143,6 +153,8 @@ std::vector<engine::FieldItem> vTrees;
 std::vector<engine::FieldItem> vRings;
 
 std::vector<BULLET>vShots;
+
+std::vector<DRIEDTREE> vDriedTrees;
 
 std::vector<engine::Creature> vEvils;
 
@@ -192,6 +204,7 @@ void ReleaseMem()
     Collect(&bmpRip);
     Collect(&bmpPortal);
     Collect(&bmpTree);
+    Collect(&bmpDriedTree);
 
     Collect(&bmpMushroom);
     Collect(&bmpDizzy);
@@ -259,6 +272,8 @@ void InitGame()
     vTrees.clear();
 
     if (!vShots.empty())vShots.clear();
+
+    if (!vDriedTrees.empty())vDriedTrees.clear();
 
     if (!vEvils.empty())
         for (int i = 0; i < vEvils.size(); ++i)Collect(&vEvils[i]);
@@ -763,6 +778,13 @@ void CreateResources()
             if (!bmpTree)
             {
                 LogError(L"Error loading bmpTree");
+                ErrExit(eD2D);
+            }
+
+            bmpDriedTree = Load(L".\\res\\img\\field\\dry_tree.png", Draw);
+            if (!bmpDriedTree)
+            {
+                LogError(L"Error loading bmpDriedTree");
                 ErrExit(eD2D);
             }
 
@@ -1478,6 +1500,105 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        //BATTLES *********************************
+        
+        if (!vShots.empty() && !vBushes.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator bush = vBushes.begin(); bush < vBushes.end(); bush++)
+            {
+                bool on_target = false;
+
+                for (std::vector<BULLET>::iterator bul = vShots.begin(); bul < vShots.end(); bul++)
+                {
+                    if (!((*bush)->x >= bul->Dims.ex || (*bush)->ex <= bul->Dims.x ||
+                        (*bush)->y >= bul->Dims.ey || (*bush)->ey <= bul->Dims.y))
+                    {
+                        vDriedTrees.push_back(DRIEDTREE(engine::ATOM((*bush)->x, (*bush)->y,
+                            (*bush)->GetWidth(), (*bush)->GetHeight())));
+                        (*bush)->Release();
+                        vBushes.erase(bush);
+                        vShots.erase(bul);
+                        on_target = true;
+                        break;
+                    }
+                }
+                if (on_target)break;
+            }
+        }
+
+        if (!vShots.empty() && !vTrees.empty())
+        {
+            for (std::vector<engine::FieldItem>::iterator bush = vTrees.begin(); bush < vTrees.end(); bush++)
+            {
+                bool on_target = false;
+
+                for (std::vector<BULLET>::iterator bul = vShots.begin(); bul < vShots.end(); bul++)
+                {
+                    if (!((*bush)->x >= bul->Dims.ex || (*bush)->ex <= bul->Dims.x ||
+                        (*bush)->y >= bul->Dims.ey || (*bush)->ey <= bul->Dims.y))
+                    {
+                        vDriedTrees.push_back(DRIEDTREE(engine::ATOM((*bush)->x, (*bush)->y,
+                            (*bush)->GetWidth(), (*bush)->GetHeight())));
+                        (*bush)->Release();
+                        vTrees.erase(bush);
+                        vShots.erase(bul);
+                        on_target = true;
+                        break;
+                    }
+                }
+                if (on_target)break;
+            }
+        }
+        
+        if (!vShots.empty() && !vEvils.empty())
+        {
+            for (std::vector<engine::Creature>::iterator evil = vEvils.begin(); evil < vEvils.end(); evil++)
+            {
+                bool killed = false;
+                for (std::vector<BULLET>::iterator bul = vShots.begin(); bul < vShots.end(); bul++)
+                {
+                    if (!((*evil)->x >= bul->Dims.ex || (*evil)->ex <= bul->Dims.x
+                        || (*evil)->y >= bul->Dims.ey || (*evil)->ey <= bul->Dims.y))
+                    {
+                        (*evil)->Release();
+                        vEvils.erase(evil);
+                        vShots.erase(bul);
+                        if (sound)mciSendString(L"play .\\res\\snd\\mushkilled.wav", NULL, NULL, NULL);
+                        killed = true;
+                        break;
+                    }
+                }
+                if (killed)break;
+            }
+        }
+
+        if (Sonic && !vEvils.empty())
+        {
+            for (std::vector<engine::Creature>::iterator evil = vEvils.begin(); evil < vEvils.end(); evil++)
+            {
+                if (!(Sonic->x > (*evil)->ex || Sonic->ex<(*evil)->x || Sonic->y>(*evil)->ey || Sonic->ey < (*evil)->y))
+                {
+                    (*evil)->Release();
+                    vEvils.erase(evil);
+                    score -= 10;
+                    if (score < 0)
+                    {
+                        RipRect.left = Sonic->x;
+                        RipRect.right = Sonic->ex;
+                        RipRect.top = Sonic->y;
+                        RipRect.bottom = Sonic->ey;
+                        if (sound)mciSendString(L"play .\\res\\snd\\killed.wav", NULL, NULL, NULL);
+                        Collect(&Sonic);
+                        sonic_killed = true;
+                    }
+                    break;
+                }
+            }
+        }
+        
+        //////////////////////////////////////////////////
+         
+        
         //DRAW THINGS ************************************
 
         if (Draw && nrmText && bigText && TxtBrush && HgltBrush && InactBrush)
@@ -1556,6 +1677,44 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 Sonic->Dizzy();
             }
 
+        }
+
+        if (!vDriedTrees.empty())
+        {
+            for (std::vector<DRIEDTREE>::iterator killed = vDriedTrees.begin(); killed < vDriedTrees.end(); killed++)
+            {
+                if (Sonic)
+                {
+                    switch (Sonic->dir)
+                    {
+                    case dirs::left:
+                        killed->Dims.x += (float)(game_speed);
+                        killed->Dims.SetEdges();
+                        break;
+
+                    case dirs::right:
+                        killed->Dims.x -= (float)(game_speed);
+                        killed->Dims.SetEdges();
+                        break;
+                    }
+                }
+
+
+                Draw->DrawBitmap(bmpDriedTree, D2D1::RectF(killed->Dims.x, killed->Dims.y, killed->Dims.ex, killed->Dims.ey));
+                killed->counter--;
+                if (killed->counter < 0)
+                {
+                    vDriedTrees.erase(killed);
+                    break;
+                }
+            }
+        }
+
+        if (sonic_killed)
+        {
+            sonic_killed_timer--;
+            Draw->DrawBitmap(bmpRip, RipRect);
+            if (sonic_killed_timer < 0)GameOver();
         }
 
         //////////////////////////////////////////////////
