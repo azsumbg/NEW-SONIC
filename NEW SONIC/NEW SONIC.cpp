@@ -144,6 +144,8 @@ std::vector<engine::FieldItem> vRings;
 
 std::vector<BULLET>vShots;
 
+std::vector<engine::Creature> vEvils;
+
 /////////////////////////////////////////////////
 template <typename T> concept CanBeReleased = requires(T var)
 {
@@ -257,6 +259,10 @@ void InitGame()
     vTrees.clear();
 
     if (!vShots.empty())vShots.clear();
+
+    if (!vEvils.empty())
+        for (int i = 0; i < vEvils.size(); ++i)Collect(&vEvils[i]);
+    vEvils.clear();
 }
 
 void GameOver()
@@ -1137,7 +1143,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
         
-        
         /////////////////////////////////////////////
 
         if (vPlatforms.size() < 2)
@@ -1149,6 +1154,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 for (float x = 0; x < 40; x += 20.0f)
                     vRings.push_back(engine::CreateFieldFactory(field_type::gold, vPlatforms.back()->x + x + 40.0f,
                         vPlatforms.back()->y - 15.0f));
+                if (vEvils.size() < 4)
+                {
+                    if (rand() % 5 == 1)
+                    {
+                        vEvils.push_back(engine::CreatureFactory(vPlatforms.back()->x + 110.0f, creature_type::mushroom));
+                        vEvils.back()->dir = dirs::left;
+                        vEvils.back()->y = vPlatforms.back()->y - vEvils.back()->GetHeight();
+                        vEvils.back()->SetEdges();
+                    }
+                }
             }
         }
         if (!vPlatforms.empty())
@@ -1171,15 +1186,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
-        if (vCubes.size() < 3)
+        if (vCubes.size() < 2)
         {
-            if (rand() % 1000 == 66)
+            if (rand() % 800 == 66)
             {
                 vCubes.push_back(engine::CreateFieldFactory(field_type::brick, scr_width, 420.0f));
                 vCubes.back()->dir = dirs::left;
                 for (float x = 0; x < 60; x += 20.0f)
                     vRings.push_back(engine::CreateFieldFactory(field_type::gold, vCubes.back()->x + x + 10.0f,
                         vCubes.back()->y - 15.0f));
+                if (vEvils.size() < 4)
+                {
+                    if (rand() % 4 == 2)
+                    {
+                        vEvils.push_back(engine::CreatureFactory(vCubes.back()->x + 70.0f, creature_type::mushroom));
+                        vEvils.back()->dir = dirs::left;
+                        vEvils.back()->y = vCubes.back()->y - vEvils.back()->GetHeight();
+                        vEvils.back()->SetEdges();
+                    }
+                }
             }
         }
         if (!vCubes.empty())
@@ -1202,7 +1227,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
-        if (vGoldCubes.size() < 3)
+        if (vGoldCubes.size() < 2)
         {
             if (rand() % 1000 == 66)
             {
@@ -1211,6 +1236,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 for (float x = 0; x < 100; x += 20.0f)
                     vRings.push_back(engine::CreateFieldFactory(field_type::gold, vGoldCubes.back()->x + x - 10.0f,
                         vGoldCubes.back()->y - 15.0f));
+                if (vEvils.size() < 4)
+                {
+                    if (rand() % 3 == 2)
+                    {
+                        vEvils.push_back(engine::CreatureFactory(vGoldCubes.back()->x + 70.0f, creature_type::mushroom));
+                        vEvils.back()->y = vGoldCubes.back()->y - vEvils.back()->GetHeight();
+                        vEvils.back()->dir = dirs::left;
+                        vEvils.back()->SetEdges();
+                    }
+                }
             }
         }
         if (!vGoldCubes.empty())
@@ -1289,6 +1324,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        if (vEvils.size() < 4)
+        {
+            if (rand() % 500 == 66)
+            {
+                vEvils.push_back(engine::CreatureFactory(scr_width, creature_type::mushroom));
+                vEvils.back()->dir = dirs::left;
+            }
+        }
+
         ////////////////////////////////////////////////////
 
         if (!vRings.empty())
@@ -1361,8 +1405,79 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
-       
+        if (!vEvils.empty())
+        {
+            for (std::vector<engine::Creature>::iterator evil = vEvils.begin(); evil < vEvils.end(); evil++)
+            {
+                if ((*evil)->y < scr_height - 100.0f - (*evil)->GetHeight())
+                {
+                    (*evil)->evil_fall = true;
+
+                    if (!vPlatforms.empty())
+                    {
+                        for (std::vector<engine::FieldItem>::iterator field = vPlatforms.begin(); field < vPlatforms.end(); ++field)
+                        {
+                            if (!((*evil)->x >= (*field)->ex || (*evil)->ex <= (*field)->x
+                                || (*evil)->y >= (*field)->ey || (*evil)->ey <= (*field)->y))
+                            {
+                                (*evil)->y = (*field)->y - (*evil)->GetHeight();
+                                (*evil)->SetEdges();
+                                (*evil)->evil_fall = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!vCubes.empty())
+                    {
+                        for (std::vector<engine::FieldItem>::iterator field = vCubes.begin(); field < vCubes.end(); ++field)
+                        {
+                            if (!((*evil)->x >= (*field)->ex || (*evil)->ex <= (*field)->x
+                                || (*evil)->y >= (*field)->ey || (*evil)->ey <= (*field)->y))
+                            {
+                                (*evil)->y = (*field)->y - (*evil)->GetHeight();
+                                (*evil)->SetEdges();
+                                (*evil)->evil_fall = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!vGoldCubes.empty())
+                    {
+                        for (std::vector<engine::FieldItem>::iterator field = vGoldCubes.begin(); field < vGoldCubes.end(); ++field)
+                        {
+                            if (!((*evil)->x >= (*field)->ex || (*evil)->ex <= (*field)->x
+                                || (*evil)->y >= (*field)->ey || (*evil)->ey <= (*field)->y))
+                            {
+                                (*evil)->y = (*field)->y - (*evil)->GetHeight();
+                                (*evil)->SetEdges();
+                                (*evil)->evil_fall = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                else (*evil)->evil_fall = false;
+                
+                if ((*evil)->evil_fall && (*evil)->ex <= scr_width)(*evil)->Fall();
+                else (*evil)->Move((float)(game_speed * 1.5f));
+            }
+        }
         
+        if (!vEvils.empty())
+        {
+            for (std::vector<engine::Creature>::iterator evil = vEvils.begin(); evil < vEvils.end(); evil++)
+            {
+                if ((*evil)->ex <= -scr_width || (*evil)->x >= 2 * scr_width)
+                {
+                    (*evil)->Release();
+                    vEvils.erase(evil);
+                    break;
+                }
+            }
+        }
+
         //DRAW THINGS ************************************
 
         if (Draw && nrmText && bigText && TxtBrush && HgltBrush && InactBrush)
@@ -1413,6 +1528,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 for (int i = 0; i < vShots.size(); i++)
                     Draw->DrawBitmap(bmpGold, D2D1::RectF(vShots[i].Dims.x, vShots[i].Dims.y,
                         vShots[i].Dims.ex, vShots[i].Dims.ey));
+            if (!vEvils.empty())
+                for (int i = 0; i < vEvils.size(); i++)
+                    Draw->DrawBitmap(bmpMushroom, D2D1::RectF(vEvils[i]->x, vEvils[i]->y,
+                        vEvils[i]->ex, vEvils[i]->ey));
         }
 
         if (Sonic)

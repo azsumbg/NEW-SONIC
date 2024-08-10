@@ -233,6 +233,7 @@ namespace engine
 		public: 
 			creature_type type = creature_type::sonic;
 			dirs dir = dirs::stop;
+			bool evil_fall = false;
 			
 			virtual ~BASICCREATURES() {};
 
@@ -248,8 +249,17 @@ namespace engine
 			
 			void Fall()
 			{
-				y += speed;
-				SetEdges();
+				if (y + GetHeight() < scr_width - 100.0f)
+				{
+					y += speed;
+					SetEdges();
+				}
+				else
+				{
+					y = scr_width - 100.0f - GetHeight();
+					SetEdges();
+					evil_fall = false;
+				}
 			}
 
 			virtual int GetFrame() = 0;
