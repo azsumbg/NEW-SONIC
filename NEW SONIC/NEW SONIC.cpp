@@ -6,7 +6,6 @@
 #include "ErrH.h"
 #include "FCheck.h"
 #include "D2BMPLOADER.h"
-#include "intersect.h"
 #include "soniceng.h"
 #include <vector>
 #include <ctime>
@@ -19,7 +18,6 @@
 #pragma comment(lib, "errh.lib")
 #pragma comment(lib, "fcheck.lib")
 #pragma comment(lib, "d2bmploader.lib")
-#pragma comment(lib, "intersect.lib")
 #pragma comment(lib, "soniceng.lib")
 
 #define bWinClassName L"MySonicGame"
@@ -710,6 +708,58 @@ void LoadGame()
     if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
     MessageBox(bHwnd, L"Играта е заредена !", L"Запис", MB_OK | MB_APPLMODAL | MB_ICONINFORMATION);
 }
+void Help()
+{
+    int result = 0;
+    CheckFile(help_file, &result);
+
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+        MessageBox(bHwnd, L"Липсва помощ за играта !\n\nСвържете се с разработчика !", L"Липсва файл !",
+            MB_OK | MB_APPLMODAL | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    wchar_t hlp_text[1000] = L"\0";
+
+    std::wifstream hlp(help_file);
+
+    hlp >> result;
+
+    for (int i = 0; i < result; i++)
+    {
+        int letter = 0;
+        hlp >> letter;
+        hlp_text[i] = static_cast<wchar_t>(letter);
+    }
+
+    hlp.close();
+
+    if (sound)mciSendString(L"play .\\res\\snd\\help.wav", NULL, NULL, NULL);
+    
+    if (Draw && BckgBrush && TxtBrush && nrmText)
+    {
+        Draw->BeginDraw();
+        Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+        Draw->FillRectangle(D2D1::RectF(0, 0, scr_width, 50.0f), BckgBrush);
+        if (name_set)
+            Draw->DrawText(L"ИМЕ НА ИГРАЧ", 13, nrmText, b1Rect, InactBrush);
+        else
+        {
+            if (b1Hglt)Draw->DrawText(L"ИМЕ НА ИГРАЧ", 13, nrmText, b1Rect, HgltBrush);
+            else Draw->DrawText(L"ИМЕ НА ИГРАЧ", 13, nrmText, b1Rect, TxtBrush);
+        }
+        if (b2Hglt)Draw->DrawText(L"ЗВУЦИ ON / OFF", 15, nrmText, b2Rect, HgltBrush);
+        else Draw->DrawText(L"ЗВУЦИ ON / OFF", 15, nrmText, b2Rect, TxtBrush);
+        if (b3Hglt)Draw->DrawText(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, b3Rect, HgltBrush);
+        else Draw->DrawText(L"ПОМОЩ ЗА ИГРАТА", 16, nrmText, b3Rect, TxtBrush);
+        Draw->DrawText(hlp_text, result, nrmText, D2D1::RectF(100.0f, scr_height / 2 - 200.0f,
+            scr_width, scr_height), TxtBrush);
+        Draw->EndDraw();
+    }
+    
+}
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -1014,15 +1064,16 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             {
                 if (name_set)
                 {
-                    if(sound)mciSendString(L"play .\\res\\negative.wav", NULL, NULL, NULL);
+                    if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
                     break;
                 }
-                if (sound)mciSendString(L"play .\\res\\select.wav", NULL, NULL, NULL);
+                if (sound)mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
                 if (DialogBox(bIns, MAKEINTRESOURCE(IDD_PLAYER), hwnd, &DlgProc) == IDOK)name_set = true;
                 break;
             }
             if (LOWORD(lParam) >= b2Rect.left && LOWORD(lParam) <= b2Rect.right)
             {
+                mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
                 if (sound)
                 {
                     sound = false;
@@ -1036,7 +1087,23 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                     break;
                 }
             }
+            if (LOWORD(lParam) >= b3Rect.left && LOWORD(lParam) <= b3Rect.right)
+            {
+                if(sound) mciSendString(L"play .\\res\\snd\\select.wav", NULL, NULL, NULL);
 
+                if (!show_help)
+                {
+                    show_help = true;
+                    pause = true;
+                    Help();
+                    break;
+                }
+                else
+                {
+                    show_help = false;
+                    pause = false;
+                }
+            }
         }
         break;
 
@@ -1376,6 +1443,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
     CreateResources();
+
+    PlaySound(snd_file, NULL, SND_ASYNC | SND_LOOP);
 
     while (bMsg.message != WM_QUIT)
     {
