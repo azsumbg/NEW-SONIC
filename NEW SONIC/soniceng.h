@@ -99,7 +99,7 @@ namespace engine
 					break;
 
 				case field_type::brick:
-					NewDims(80.0f, 80.0f);
+					NewDims(60.0f, 60.0f);
 					break;
 
 				case field_type::bush:
@@ -107,11 +107,11 @@ namespace engine
 					break;
 
 				case field_type::gold:
-					NewDims(10.0f, 10.0f);
+					NewDims(15.0f, 15.0f);
 					break;
 
 				case field_type::gold_brick:
-					NewDims(80.0f, 80.0f);
+					NewDims(60.0f, 60.0f);
 					break;
 
 

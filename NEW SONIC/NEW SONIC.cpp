@@ -88,6 +88,7 @@ wchar_t current_player[16] = L"A HEDGEHOG";
 
 int game_speed = 1;
 int score = 0;
+int bonus = 0;
 int mins = 0;
 int secs = 0;
 UINT bTimer = -1;
@@ -231,7 +232,7 @@ void InitGame()
     game_speed = 1;
     mins = 0;
     secs = 300;
-
+    
     need_left_field = false;
     need_right_field = false;
 
@@ -240,6 +241,7 @@ void InitGame()
         wcscpy_s(current_player, L"A HEDGEHOG");
         name_set = false;
         score = 0;
+        bonus = 0;
     }
 
     if (portal_enabled)
@@ -333,6 +335,7 @@ void GameOver()
     PlaySound(NULL, NULL, NULL);
     score = 0;
     for (int i = 1; i <= game_speed; i++)score += (300 - secs) * i;
+    score += bonus;
 
     wchar_t final_text[19] = L"О, О, О ! ЗАГУБИ !";
     int txt_size = 19;
@@ -356,7 +359,7 @@ void GameOver()
         break;
     }
 
-    int blinker = 15;
+    int blinker = 25;
 
     while (blinker > 0)
     {
@@ -381,7 +384,6 @@ void GameOver()
         }
         blinker--;
     }
-    Sleep(6500);
     bMsg.message = WM_QUIT;
     bMsg.wParam = 0;
 }
@@ -389,6 +391,8 @@ void LevelUp()
 {
     if (sound)mciSendString(L"play .\\res\\snd\\levelup.wav", NULL, NULL, NULL);
     
+    bonus += score;
+
     int blinker = 15;
 
     while (blinker > 0)
@@ -418,6 +422,202 @@ void LevelUp()
     InitGame();
     game_speed++;
 }
+
+void ShowRecord()
+{
+    int result = 0;
+    CheckFile(record_file, &result);
+
+    if (result == FILE_NOT_EXIST)
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+        MessageBox(bHwnd, L"Все още няма рекорд на играта !\n\nПостарай се повече !", L"Липсва файл !",
+            MB_OK | MB_APPLMODAL | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    wchar_t rec_txt[200] = L"Най-добър Тарльо: ";
+    wchar_t saved_player[16] = L"\0";
+    wchar_t add[5] = L"\0";
+
+    std::wifstream rec(record_file);
+    rec >> result;
+    wsprintf(add, L"%d", result);
+    for (int i = 0; i < 16; i++)
+    {
+        int letter = 0;
+        rec >> letter;
+        saved_player[i] = static_cast<wchar_t>(letter);
+    }
+    rec.close();
+    result = 0;
+
+    wcscat_s(rec_txt, saved_player);
+    wcscat_s(rec_txt, L"\n\nСветовен рекорд: ");
+    wcscat_s(rec_txt, add);
+
+    for (int i = 0; i < 200; i++)
+    {
+        if (rec_txt[i] != '\0')result++;
+        else break;
+    }
+
+    if (sound)mciSendString(L"play .\\res\\snd\\showrec.wav", NULL, NULL, NULL);
+
+    Draw->BeginDraw();
+    Draw->Clear(D2D1::ColorF(D2D1::ColorF::Indigo));
+    if (bigText && TxtBrush)
+        Draw->DrawTextW(rec_txt, result, bigText, D2D1::RectF(0.0f, 100.0f, scr_width, scr_height), TxtBrush);
+    Draw->EndDraw();
+
+    Sleep(3500);
+}
+void SaveGame()
+{
+    int result = 0;
+    CheckFile(save_file, &result);
+    if (result == FILE_EXIST)
+    {
+        if (sound)MessageBeep(MB_ICONEXCLAMATION);
+        if (MessageBox(bHwnd, L"Съществува предишна записана игра !\n\nДа я презапиша ли ?", L"Презапис",
+            MB_OK | MB_APPLMODAL | MB_ICONQUESTION) == IDNO)return;
+        
+    }
+
+    std::wofstream save(save_file);
+
+    save << score << std::endl;
+    save << bonus << std::endl;
+    save << game_speed << std::endl;
+    save << secs << std::endl;
+
+    for (int i = 0; i < 16; i++)save << static_cast<int>(current_player[i]) << std::endl;
+    save << name_set << std::endl;
+
+    save << portal_enabled << std::endl;
+    if(portal_enabled)save << Portal->x << std::endl;
+    else save << 0 << std::endl;
+
+    if(!Sonic)save << 0 << std::endl;
+    else save << Sonic->x << std::endl;
+
+    save << vPlatforms.size() << std::endl;
+    if (!vPlatforms.empty())
+        for (int i = 0; i < vPlatforms.size(); i++)save << vPlatforms[i]->x << std::endl;
+
+    save << vCubes.size() << std::endl;
+    if (!vCubes.empty())
+        for (int i = 0; i < vCubes.size(); i++)save << vCubes[i]->x << std::endl;
+
+    save << vGoldCubes.size() << std::endl;
+    if (!vGoldCubes.empty())
+        for (int i = 0; i < vGoldCubes.size(); i++)save << vGoldCubes[i]->x << std::endl;
+
+    save << vBushes.size() << std::endl;
+    if (!vBushes.empty())
+        for (int i = 0; i < vBushes.size(); i++)save << vBushes[i]->x << std::endl;
+
+    save << vTrees.size() << std::endl;
+    if (!vTrees.empty())
+        for (int i = 0; i < vTrees.size(); i++)save << vTrees[i]->x << std::endl;
+
+    save << vRings.size() << std::endl;
+    if (!vRings.empty())
+        for (int i = 0; i < vRings.size(); i++)
+        {
+            save << vRings[i]->x << std::endl;
+            save << vRings[i]->y << std::endl;
+        }
+
+    save << vEvils.size() << std::endl;
+    if (!vEvils.empty())
+        for (int i = 0; i < vEvils.size(); i++)
+        {
+            save << vEvils[i]->x << std::endl;
+            save << vEvils[i]->y << std::endl;
+        }
+
+    if (!Sonic)save << 0 << std::endl;
+    else save << Sonic->x << std::endl;
+        
+    save.close();
+    if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
+    MessageBox(bHwnd, L"Играта е записана !", L"Запис", MB_OK | MB_APPLMODAL | MB_ICONINFORMATION);
+}
+void LoadGame()
+{
+    int result = 0;
+    CheckFile(save_file, &result);
+    if (result == FILE_EXIST)
+    {
+        if (sound)MessageBeep(MB_ICONEXCLAMATION);
+        if (MessageBox(bHwnd, L"Настоящата игра ще бъде загубена!\n\nДа я презапиша ли ?", L"Презапис",
+            MB_OK | MB_APPLMODAL | MB_ICONQUESTION) == IDNO)return;
+    }
+    else
+    {
+        if (sound)mciSendString(L"play .\\res\\snd\\negative.wav", NULL, NULL, NULL);
+        MessageBox(bHwnd, L"Все още няма записана игра !\n\nПостарай се повече !", L"Липсва файл !",
+            MB_OK | MB_APPLMODAL | MB_ICONEXCLAMATION);
+        return;
+    }
+
+    std::wifstream save(save_file);
+
+    Collect(&Sonic);
+    Sonic = engine::CreatureFactory(100.0f, creature_type::sonic);
+
+    if (!vFields.empty())
+    {
+        for (int i = 0; i < vFields.size(); i++)Collect(&vFields[i]);
+    }
+    vFields.clear();
+
+    vFields.push_back(engine::CreateFieldFactory(field_type::field, -scr_width, scr_height - 100.0f));
+    vFields.push_back(engine::CreateFieldFactory(field_type::field, 0, scr_height - 100.0f));
+    vFields.push_back(engine::CreateFieldFactory(field_type::field, scr_width, scr_height - 100.0f));
+
+    if (!vPlatforms.empty())
+        for (int i = 0; i < vPlatforms.size(); i++)Collect(&vPlatforms[i]);
+    vPlatforms.clear();
+
+    if (!vCubes.empty())
+        for (int i = 0; i < vCubes.size(); i++)Collect(&vCubes[i]);
+    vCubes.clear();
+
+    if (!vGoldCubes.empty())
+        for (int i = 0; i < vGoldCubes.size(); i++)Collect(&vGoldCubes[i]);
+    vGoldCubes.clear();
+
+    if (!vBushes.empty())
+        for (int i = 0; i < vBushes.size(); i++)Collect(&vBushes[i]);
+    vBushes.clear();
+
+    if (!vTrees.empty())
+        for (int i = 0; i < vTrees.size(); i++)Collect(&vTrees[i]);
+    vTrees.clear();
+
+    if (!vRings.empty())
+        for (int i = 0; i < vTrees.size(); i++)Collect(&vRings[i]);
+    vRings.clear();
+
+    if (!vShots.empty())vShots.clear();
+
+    if (!vDriedTrees.empty())vDriedTrees.clear();
+
+    if (!vEvils.empty())
+        for (int i = 0; i < vEvils.size(); ++i)Collect(&vEvils[i]);
+    vEvils.clear();
+
+    ////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+}
+
+
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -638,6 +838,12 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
 
 
+
+        case mHoF:
+            pause = true;
+            ShowRecord();
+            pause = false;
+            break;
         }
         break;
 
@@ -713,6 +919,21 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
                 if (sound)mciSendString(L"play .\\res\\select.wav", NULL, NULL, NULL);
                 if (DialogBox(bIns, MAKEINTRESOURCE(IDD_PLAYER), hwnd, &DlgProc) == IDOK)name_set = true;
                 break;
+            }
+            if (LOWORD(lParam) >= b2Rect.left && LOWORD(lParam) <= b2Rect.right)
+            {
+                if (sound)
+                {
+                    sound = false;
+                    PlaySound(NULL, NULL, NULL);
+                    break;
+                }
+                else
+                {
+                    sound = true;
+                    PlaySound(snd_file, NULL, SND_ASYNC | SND_LOOP);
+                    break;
+                }
             }
 
         }
@@ -1926,6 +2147,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         wsprintf(add, L"%d", secs - mins * 60);
         wcscat_s(stat_text, add);
 
+        wcscat_s(stat_text, L", резултат: ");
+        wsprintf(add, L"%d", bonus + ((300 - secs) * game_speed));
+        wcscat_s(stat_text, add);
+
         for (int i = 0; i < 350; i++)
         {
             if (stat_text[i] != '\0')txt_size++;
@@ -1934,7 +2159,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (nrmText && TxtBrush)
             Draw->DrawTextW(stat_text, txt_size, nrmText, D2D1::RectF(20.0f, scr_height - 60.0f, scr_width, scr_height), TxtBrush);
-
 
         //////////////////////////////////////////////////
         Draw->EndDraw();
