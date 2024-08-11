@@ -498,7 +498,7 @@ void SaveGame()
     if(portal_enabled)save << Portal->x << std::endl;
     else save << 0 << std::endl;
 
-    if(!Sonic)save << 0 << std::endl;
+    if(!Sonic)save << -100 << std::endl;
     else save << Sonic->x << std::endl;
 
     save << vPlatforms.size() << std::endl;
@@ -531,12 +531,8 @@ void SaveGame()
 
     save << vEvils.size() << std::endl;
     if (!vEvils.empty())
-        for (int i = 0; i < vEvils.size(); i++)
-        {
-            save << vEvils[i]->x << std::endl;
-            save << vEvils[i]->y << std::endl;
-        }
-
+        for (int i = 0; i < vEvils.size(); i++) save << vEvils[i]->x << std::endl;
+            
     if (!Sonic)save << 0 << std::endl;
     else save << Sonic->x << std::endl;
         
@@ -611,13 +607,109 @@ void LoadGame()
 
     ////////////////////////////////////////////////////////////////////////////
 
+    float temp_x = 0;
+    float temp_y = 0;
 
+    save >> score;
+    save >> bonus;
+    save >> game_speed;
+    save >> secs;
 
+    for (int i = 0; i < 16; i++)
+    {
+        int letter = 0;
+        save >> letter;
+        current_player[i] = static_cast<wchar_t>(letter);
+    }
+    save >> name_set;
 
+    save >> portal_enabled;
+    save >> temp_x;
+    if (portal_enabled) Portal = engine::CreateFieldFactory(field_type::portal, temp_x, scr_height - 200.0f);
 
+    save >> temp_x;
+    if (temp_x == -100)GameOver();
+    else Sonic = engine::CreatureFactory(temp_x, creature_type::sonic);
+
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            vPlatforms.push_back(engine::CreateFieldFactory(field_type::platform, temp_x, 520.0f));
+        }
+    }
+
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            vCubes.push_back(engine::CreateFieldFactory(field_type::brick, temp_x, 420.0f));
+        }
+    }
+
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            vGoldCubes.push_back(engine::CreateFieldFactory(field_type::gold_brick, temp_x, 280.0f));
+        }
+    }
+
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            vBushes.push_back(engine::CreateFieldFactory(field_type::bush, temp_x, scr_height - 160.0f));
+        }
+    }
+
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            vTrees.push_back(engine::CreateFieldFactory(field_type::tree, temp_x, scr_height - 160.0f));
+        }
+    }
+    
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            save >> temp_y;
+            vRings.push_back(engine::CreateFieldFactory(field_type::gold, temp_x, temp_y));
+        }
+    }
+
+    save >> result;
+    if (result > 0)
+    {
+        for (int i = 0; i < result; i++)
+        {
+            save >> temp_x;
+            vEvils.push_back(engine::CreatureFactory(temp_x, creature_type::mushroom));
+        }
+    }
+
+    save >> temp_x;
+    if (temp_x > 0) Sonic = engine::CreatureFactory(temp_x, creature_type::sonic);
+    else GameOver();
+    
+    save.close();
+    if (sound)mciSendString(L"play .\\res\\snd\\save.wav", NULL, NULL, NULL);
+    MessageBox(bHwnd, L"Играта е заредена !", L"Запис", MB_OK | MB_APPLMODAL | MB_ICONINFORMATION);
 }
-
-
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -836,8 +928,17 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             SendMessage(hwnd, WM_CLOSE, NULL, NULL);
             break;
 
+        case mSave:
+            pause = true;
+            SaveGame();
+            pause = false;
+            break;
 
-
+        case mLoad:
+            pause = true;
+            LoadGame();
+            pause = false;
+            break;
 
         case mHoF:
             pause = true;
